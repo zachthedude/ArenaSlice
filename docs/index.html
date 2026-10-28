@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArenaSlice · Unity arena shooter</title>
+<meta name="description" content="ArenaSlice: a greybox first-person arena shooter built in Unity 6. One arena, four waves, enemies that see and hear you. Interactive breakdown of the movement, AI and weapons.">
+<meta name="theme-color" content="#07070a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2307070a'/%3E%3Cpath d='M9 23 16 8l7 15' stroke='%23ef233c' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07070a; --ink: #f2f2f4; --soft: #a3a3ae; --faint: #6b6b76;
+    --red: #ef233c; --red-glow: rgba(239, 35, 60, .35); --amber: #f5b83d;
+    --card: rgba(255, 255, 255, .035); --line: rgba(255, 255, 255, .09);
+    --ease: cubic-bezier(.32, .72, 0, 1);
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+    --sans: "Manrope", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 400 17px/1.6 var(--sans); overflow-x: hidden; }
+  body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+    background:
+      radial-gradient(60% 40% at 50% 0%, rgba(239, 35, 60, .14), transparent 70%),
+      linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px) 0 0 / 40px 40px,
+      linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px) 0 0 / 40px 40px;
+    -webkit-mask-image: radial-gradient(circle at 50% 30%, #000 30%, transparent 85%); mask-image: radial-gradient(circle at 50% 30%, #000 30%, transparent 85%); }
+  ::selection { background: var(--red); color: #fff; }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--red); outline-offset: 3px; border-radius: 6px; }
+  .wrap { width: min(1180px, 100% - 32px); margin-inline: auto; }
+  section { padding: clamp(88px, 12vw, 152px) 0; }
+  .mono { font-family: var(--mono); }
+  .eyebrow { display: inline-flex; gap: 8px; align-items: center; font: 500 11px/1 var(--mono); letter-spacing: .2em; text-transform: uppercase;
+    color: var(--soft); border: 1px solid var(--line); border-radius: 99px; padding: 7px 12px; background: var(--card); }
+  .eyebrow b { color: var(--red); font-weight: 500; }
+  h1, h2, h3 { margin: 0; letter-spacing: -.04em; line-height: .95; }
+  h2 { font-size: clamp(2.4rem, 5.5vw, 4.4rem); font-weight: 800; margin: 20px 0 18px; }
+  .lede { color: var(--soft); max-width: 56ch; margin: 0; }
+
+  /* nav */
+  .nav { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; gap: 4px; align-items: center;
+    padding: 6px; border-radius: 99px; background: rgba(12, 12, 16, .72); border: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .nav a { text-decoration: none; font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); padding: 10px 14px; border-radius: 99px; transition: color .4s var(--ease), background .4s var(--ease); }
+  .nav a:hover { color: var(--ink); background: rgba(255,255,255,.06); }
+  .nav a.code { background: var(--ink); color: var(--bg); }
+  @media (max-width: 640px) { .nav a:not(.code):not(.brand) { display: none; } }
+
+  /* buttons */
+  .btn { display: inline-flex; align-items: center; gap: 14px; padding: 8px 8px 8px 22px; border-radius: 99px; text-decoration: none; font: 700 15px/1 var(--sans);
+    border: 1px solid var(--line); background: var(--card); transition: transform .5s var(--ease), background .5s var(--ease), box-shadow .5s var(--ease); }
+  .btn .dot { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.08); transition: transform .5s var(--ease); }
+  .btn:hover .dot { transform: translate(2px, -2px) scale(1.06); }
+  .btn:active { transform: scale(.98); }
+  .btn.primary { background: var(--red); border-color: transparent; color: #fff; box-shadow: 0 10px 40px -10px var(--red-glow); }
+  .btn.primary .dot { background: rgba(0,0,0,.2); }
+  .btn.primary:hover { box-shadow: 0 14px 50px -8px var(--red-glow); }
+  .btn.ghost { padding: 8px 22px; min-height: 52px; }
+
+  /* hero */
+  .hero { min-height: 100dvh; display: grid; align-content: center; padding-top: 120px; }
+  .hero h1 { font-size: clamp(4rem, 15vw, 12rem); font-weight: 800; margin: 26px 0 22px; }
+  .hero h1 span { color: transparent; -webkit-text-stroke: 1.5px rgba(255,255,255,.28); }
+  .hero p { font-size: clamp(1.1rem, 2vw, 1.35rem); color: var(--soft); max-width: 34ch; margin: 0 0 36px; }
+  .hero p em { color: var(--ink); font-style: normal; }
+  .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 72px; background: var(--line); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; }
+  .stat { background: var(--bg); padding: 22px 24px; }
+  .stat small { font: 500 10px/1 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--faint); }
+  .stat strong { display: block; font: 700 clamp(1.8rem, 4vw, 2.6rem)/1 var(--mono); margin-top: 12px; }
+  .stat strong i { font-style: normal; font-size: .4em; color: var(--soft); margin-left: 6px; letter-spacing: .1em; }
+  @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+  /* double-bezel panels */
+  .shell { padding: 6px; border-radius: 28px; background: rgba(255,255,255,.025); border: 1px solid var(--line); }
+  .core { border-radius: 22px; background: #0d0d12; box-shadow: inset 0 1px 0 rgba(255,255,255,.06); padding: clamp(18px, 3vw, 28px); position: relative; height: 100%; }
+  .hud-label { font: 500 11px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--soft); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .hud-label b { color: var(--red); font-weight: 500; }
+  .core::before, .core::after { content: ""; position: absolute; width: 14px; height: 14px; border: 1.5px solid rgba(239,35,60,.6); pointer-events: none; }
+  .core::before { top: 10px; left: 10px; border-right: 0; border-bottom: 0; border-top-left-radius: 6px; }
+  .core::after { bottom: 10px; right: 10px; border-left: 0; border-top: 0; border-bottom-right-radius: 6px; }
+
+  .split { display: grid; grid-template-columns: 5fr 7fr; gap: clamp(28px, 5vw, 64px); align-items: center; }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+
+  /* movement */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
+  .chip { font: 500 12px/1 var(--mono); letter-spacing: .06em; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); color: var(--soft); background: var(--card); }
+  .chip b { color: var(--ink); font-weight: 500; }
+  .readouts { display: flex; gap: 28px; margin-top: 18px; }
+  .readouts div small { display: block; font: 500 10px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
+  .readouts div strong { font: 700 28px/1.3 var(--mono); }
+  .readouts div strong i { font-style: normal; font-size: 13px; color: var(--soft); margin-left: 4px; }
+  canvas { display: block; width: 100%; }
+  #jump { height: 220px; margin: 8px 0 14px; }
+  .slider { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center; margin-top: 14px; font: 500 12px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--soft); }
+  .slider output { color: var(--ink); }
+  input[type=range] { grid-column: 1 / -1; width: 100%; appearance: none; -webkit-appearance: none; height: 28px; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--red) var(--p, 50%), rgba(255,255,255,.12) var(--p, 50%)); }
+  input[type=range]::-moz-range-track { height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--red) var(--p, 50%), rgba(255,255,255,.12) var(--p, 50%)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -7.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 5px rgba(239,35,60,.35); transition: transform .3s var(--ease); }
+  input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 5px rgba(239,35,60,.35); }
+  input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); }
+
+  /* AI */
+  .center { text-align: center; }
+  .center .lede { margin-inline: auto; }
+  .ai { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 56px; }
+  @media (max-width: 900px) { .ai { grid-template-columns: 1fr; } }
+  .states { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 6px; }
+  .states button { width: 100%; text-align: left; display: grid; grid-template-columns: 14px 1fr auto; gap: 14px; align-items: center; padding: 14px 16px; border-radius: 14px;
+    border: 1px solid transparent; background: transparent; color: var(--soft); font: 500 13px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; cursor: pointer;
+    transition: background .4s var(--ease), border-color .4s var(--ease), color .4s var(--ease); }
+  .states button:hover { background: rgba(255,255,255,.03); color: var(--ink); }
+  .states button[aria-pressed=true] { background: rgba(255,255,255,.05); border-color: var(--line); color: var(--ink); }
+  .states .pip { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); }
+  .states .sym { font-size: 15px; font-weight: 700; }
+  .s-investigate .pip, .s-search .pip { background: var(--amber); } .s-investigate .sym, .s-search .sym { color: var(--amber); }
+  .s-chase .pip, .s-attack .pip { background: var(--red); box-shadow: 0 0 12px var(--red-glow); } .s-chase .sym, .s-attack .sym { color: var(--red); }
+  .state-detail { margin-top: 18px; padding: 18px; border-radius: 14px; background: rgba(255,255,255,.025); border: 1px dashed var(--line); min-height: 132px; }
+  .state-detail h3 { font-size: 20px; letter-spacing: -.02em; margin-bottom: 8px; }
+  .state-detail p { margin: 0; color: var(--soft); font-size: 15px; }
+  .state-detail .next { margin-top: 10px; font: 500 12px/1.6 var(--mono); color: var(--faint); }
+  #radar { aspect-ratio: 1 / .78; margin: 16px 0; border-radius: 16px; background: #09090d; border: 1px solid var(--line); }
+  .noise { display: flex; flex-wrap: wrap; gap: 6px; }
+  .noise button { font: 500 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: transparent; color: var(--soft); cursor: pointer; transition: all .4s var(--ease); }
+  .noise button:hover { color: var(--ink); border-color: rgba(255,255,255,.2); }
+  .noise button[aria-pressed=true] { color: #fff; border-color: var(--red); background: rgba(239,35,60,.12); }
+  .radar-note { font: 500 12px/1.5 var(--mono); color: var(--soft); margin: 12px 0 0; min-height: 3em; }
+
+  /* weapons */
+  .head-row { display: flex; justify-content: space-between; align-items: end; gap: 24px; flex-wrap: wrap; }
+  .guns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 48px; }
+  @media (max-width: 900px) { .guns { grid-template-columns: 1fr; } }
+  .gun h3 { font-size: 30px; letter-spacing: -.03em; }
+  .gun .type { font: 500 11px/1 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--red); margin-top: 8px; }
+  .specs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 26px 0 8px; }
+  .specs small { display: block; font: 500 10px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
+  .specs strong { font: 700 22px/1.5 var(--mono); }
+  .specs strong i { font-style: normal; font-size: 12px; color: var(--soft); margin-left: 3px; }
+  .falloff { height: 150px; margin-top: 10px; }
+  .dmg { font: 500 13px/1.4 var(--mono); color: var(--soft); margin-top: 6px; }
+  .dmg b { color: var(--ink); font-weight: 700; } .dmg b.h { color: var(--red); }
+  .range-ctl { margin-top: 28px; }
+
+  /* waves + a11y */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 5vw, 64px); align-items: start; }
+  @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+  .wave { display: grid; grid-template-columns: 110px 1fr 44px; gap: 16px; align-items: center; padding: 18px 0; border-bottom: 1px solid var(--line); font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--soft); }
+  .wave .bar { height: 8px; border-radius: 8px; background: rgba(255,255,255,.06); overflow: hidden; }
+  .wave .bar i { display: flex; gap: 3px; height: 100%; width: calc(var(--n) / 8 * 100%); transform-origin: left; transition: transform 1.2s var(--ease); }
+  .wave .bar i::before { content: ""; flex: 1; background: repeating-linear-gradient(90deg, var(--red) 0 calc(100% / var(--n) - 3px), transparent calc(100% / var(--n) - 3px) calc(100% / var(--n))); }
+  .js .waves:not(.in) .bar i { transform: scaleX(0); }
+  .wave strong { font-size: 22px; color: var(--ink); text-align: right; }
+  .a11y { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .a11y li { padding: 18px 20px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+  .a11y b { display: block; margin-bottom: 4px; }
+  .a11y span { color: var(--soft); font-size: 15px; }
+
+  /* controls */
+  .keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 48px; }
+  .key { padding: 18px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); transition: border-color .3s var(--ease), background .3s var(--ease), transform .3s var(--ease); }
+  .key.on { border-color: var(--red); background: rgba(239,35,60,.1); transform: translateY(-3px); }
+  .key kbd { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+  .key kbd span { font: 700 13px/1 var(--mono); padding: 8px 10px; border-radius: 8px; background: #16161d; border: 1px solid rgba(255,255,255,.12); border-bottom-width: 3px; }
+  .key p { margin: 12px 0 0; font: 500 12px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); }
+  .hint { font: 500 12px/1 var(--mono); color: var(--faint); margin-top: 18px; letter-spacing: .06em; }
+
+  /* footer */
+  .end { text-align: center; }
+  .end h2 { margin-bottom: 18px; }
+  .end .ctas { justify-content: center; margin-top: 34px; }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 40px; font: 500 12px/1.6 var(--mono); color: var(--faint); }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  /* reveal */
+  .js .reveal { opacity: 0; transform: translateY(24px); transition: opacity .9s var(--ease), transform .9s var(--ease); }
+  .js .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .js .reveal { opacity: 1; transform: none; transition: none; }
+    .js .waves:not(.in) .bar i { transform: none; }
+  }
+</style>
+</head>
+<body>
+<script>document.documentElement.classList.add('js')</script>
+<nav class="nav" aria-label="Sections">
+  <a class="brand" href="#top">ArenaSlice</a>
+  <a href="#movement">Movement</a><a href="#ai">AI</a><a href="#weapons">Weapons</a><a href="#controls">Controls</a>
+  <a class="code" href="https://github.com/zachthedude/ArenaSlice">Code</a>
+</nav>
+
+<main id="top">
+  <header class="hero wrap">
+    <div class="reveal"><span class="eyebrow"><b>●</b> Unity 6 · C# · vertical slice</span></div>
+    <h1 class="reveal">Arena<span>Slice</span></h1>
+    <p class="reveal">A first-person arena shooter. One arena, four waves, enemies that <em>see</em> and <em>hear</em> you.</p>
+    <div class="ctas reveal">
+      <a class="btn primary" href="https://github.com/zachthedude/ArenaSlice">Read the code <span class="dot" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M8 7h9v9"/></svg></span></a>
+      <a class="btn ghost" href="#movement">How it plays</a>
+    </div>
+    <div class="stats reveal">
+      <div class="stat"><small>Waves</small><strong>4</strong></div>
+      <div class="stat"><small>Enemies</small><strong>21<i>3·4·6·8</i></strong></div>
+      <div class="stat"><small>AI states</small><strong>6</strong></div>
+      <div class="stat"><small>Weapons</small><strong>2</strong></div>
+    </div>
+  </header>
+
+  <section id="movement">
+    <div class="wrap split">
+      <div class="reveal">
+        <span class="eyebrow"><b>01</b> Movement</span>
+        <h2>Jumps built from physics, not feel.</h2>
+        <p class="lede">The jump isn't a tuned impulse. <span class="mono">Kinematics.cs</span> solves v² = u² + 2as for the speed that reaches an exact height, so changing gravity never changes how high you go. Try it.</p>
+        <div class="chips">
+          <span class="chip">Walk <b>5 m/s</b></span><span class="chip">Sprint <b>8 m/s</b></span><span class="chip">Crouch <b>2.5 m/s</b></span>
+          <span class="chip">Slide <b>μg·cosθ</b></span><span class="chip">Coyote <b>0.10 s</b></span><span class="chip">Buffer <b>0.12 s</b></span>
+        </div>
+      </div>
+      <div class="shell reveal"><div class="core">
+        <div class="hud-label"><span>Jump kinematics</span><b>u = √(2gh)</b></div>
+        <div class="readouts" aria-live="polite">
+          <div><small>Takeoff speed</small><strong id="u">6.93<i>m/s</i></strong></div>
+          <div><small>Air time</small><strong id="t">0.69<i>s</i></strong></div>
+        </div>
+        <canvas id="jump" aria-label="Arc of the jump for the chosen gravity and height"></canvas>
+        <label class="slider">Gravity g <output id="gOut">20 m/s²</output><input id="g" type="range" min="5" max="30" step="0.5" value="20"></label>
+        <label class="slider">Jump height h <output id="hOut">1.2 m</output><input id="h" type="range" min="0.4" max="2.4" step="0.05" value="1.2"></label>
+      </div></div>
+    </div>
+  </section>
+
+  <section id="ai">
+    <div class="wrap">
+      <div class="center reveal">
+        <span class="eyebrow"><b>02</b> Enemy AI</span>
+        <h2>They notice you.</h2>
+        <p class="lede">Six states on a NavMesh baked at runtime. Sight is a 55° cone plus a raycast. Hearing is a sphere around every sound you make.</p>
+      </div>
+      <div class="ai">
+        <div class="shell reveal"><div class="core">
+          <div class="hud-label"><span>State machine</span><b>EnemyAI.cs</b></div>
+          <ul class="states" id="states"></ul>
+          <div class="state-detail" id="stateDetail" aria-live="polite"></div>
+        </div></div>
+        <div class="shell reveal"><div class="core">
+          <div class="hud-label"><span>Hearing radar · top-down</span><b id="radarR">Sprint 14 m</b></div>
+          <canvas id="radar" aria-label="Top-down view of the player, enemies and how far the chosen sound carries"></canvas>
+          <div class="noise" id="noise" role="group" aria-label="Sound the player makes"></div>
+          <p class="radar-note" id="radarNote" aria-live="polite"></p>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="weapons">
+    <div class="wrap">
+      <div class="head-row reveal">
+        <div><span class="eyebrow"><b>03</b> Weapons</span><h2>Two guns, one base class.</h2></div>
+        <p class="lede" style="max-width:40ch">Rate, magazine, spread, recoil, falloff, headshots and noise all live in <span class="mono">Weapon.cs</span>. The rifle raycasts; launcher rounds fly with real gravity and inherit your velocity.</p>
+      </div>
+      <div class="guns" id="guns"></div>
+      <label class="slider range-ctl reveal">Target distance <output id="dOut">30 m</output><input id="dist" type="range" min="0" max="100" step="1" value="30"></label>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap two">
+      <div class="reveal">
+        <span class="eyebrow"><b>04</b> Scope</span>
+        <h2>Four waves, five to eight minutes.</h2>
+        <div class="waves" id="waves">
+          <div class="wave">Wave 1<div class="bar"><i style="--n:3"></i></div><strong>3</strong></div>
+          <div class="wave">Wave 2<div class="bar"><i style="--n:4"></i></div><strong>4</strong></div>
+          <div class="wave">Wave 3<div class="bar"><i style="--n:6"></i></div><strong>6</strong></div>
+          <div class="wave">Wave 4<div class="bar"><i style="--n:8"></i></div><strong>8</strong></div>
+        </div>
+        <p class="hint">A start menu, an end screen with your time, and a best time saved to settings.json.</p>
+      </div>
+      <div class="reveal">
+        <span class="eyebrow"><b>05</b> Accessibility</span>
+        <h2>Playable without colour or sound.</h2>
+        <ul class="a11y">
+          <li><b>Horizontal FOV slider</b><span>Set the field of view the way your eyes like it.</span></li>
+          <li><b>Separate aim sensitivity</b><span>Aiming down sights has its own setting.</span></li>
+          <li><b>Directional subtitles</b><span>On an opaque black box, with where the sound came from.</span></li>
+          <li><b>Never colour alone</b><span>Health, ammo, hit markers and alerts all use text or shape too.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="controls">
+    <div class="wrap">
+      <div class="reveal">
+        <span class="eyebrow"><b>06</b> Controls</span>
+        <h2>Press a key.</h2>
+        <p class="lede">The cards light up as you type, the same bindings the game uses.</p>
+      </div>
+      <div class="keys reveal" id="keys"></div>
+    </div>
+  </section>
+
+  <section class="end">
+    <div class="wrap reveal">
+      <span class="eyebrow"><b>●</b> Open source</span>
+      <h2>Open it in Unity and press Play.</h2>
+      <p class="lede" style="margin-inline:auto">Game.cs builds the arena, NavMesh, player and HUD by itself, so there's no scene to wire up. Built-in Unity APIs only, no asset packs.</p>
+      <div class="ctas">
+        <a class="btn primary" href="https://github.com/zachthedude/ArenaSlice">View on GitHub <span class="dot" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M8 7h9v9"/></svg></span></a>
+        <a class="btn ghost" href="https://zachthedude.github.io/Personal-Website/#work">More projects</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap"><span>ArenaSlice · built by Zachary Samuel</span><span>Unity 6000.5 · greybox vertical slice</span></div></footer>
+
+<script>
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = (s) => document.querySelector(s);
+const red = '#ef233c', amber = '#f5b83d';
+
+// Canvas sized to its CSS box at device resolution; redraw on resize.
+function surface(canvas, draw) {
+  const g = canvas.getContext('2d');
+  const fit = () => {
+    const r = canvas.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+    canvas.width = r.width * dpr; canvas.height = r.height * dpr;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw(g, r.width, r.height);
+  };
+  new ResizeObserver(fit).observe(canvas);
+  return () => fit();
+}
+const fill = (input) => input.style.setProperty('--p', ((input.value - input.min) / (input.max - input.min) * 100) + '%');
+
+// ---- Jump: u = sqrt(2gh), air time 2u/g (Kinematics.cs)
+const gIn = $('#g'), hIn = $('#h');
+let anim = 1, raf = 0;
+const drawJump = surface($('#jump'), (g, w, h) => {
+  const grav = +gIn.value, height = +hIn.value, u = Math.sqrt(2 * grav * height), T = 2 * u / grav;
+  g.clearRect(0, 0, w, h);
+  const floor = h - 24, top = 18, maxH = 2.4, scaleY = (floor - top) / maxH;
+  const x0 = 28, x1 = w - 28;
+  g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 1; g.beginPath(); g.moveTo(0, floor); g.lineTo(w, floor); g.stroke();
+  g.setLineDash([4, 6]); g.beginPath(); g.moveTo(0, floor - height * scaleY); g.lineTo(w, floor - height * scaleY); g.stroke(); g.setLineDash([]);
+  g.fillStyle = '#6b6b76'; g.font = '500 11px "JetBrains Mono", monospace';
+  g.fillText(`${height.toFixed(2)} m`, 6, floor - height * scaleY - 6);
+  // Arc over a fixed horizontal span: y(t) = u t − ½ g t²
+  g.strokeStyle = red; g.lineWidth = 2; g.beginPath();
+  const steps = 60, upto = Math.round(steps * anim);
+  for (let i = 0; i <= upto; i++) {
+    const t = T * i / steps, y = u * t - grav * t * t / 2;
+    const x = x0 + (x1 - x0) * i / steps, py = floor - y * scaleY;
+    i ? g.lineTo(x, py) : g.moveTo(x, py);
+  }
+  g.stroke();
+  const t = T * upto / steps, y = u * t - grav * t * t / 2;
+  const bx = x0 + (x1 - x0) * upto / steps, by = floor - y * scaleY;
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(bx, by - 7, 7, 0, 7); g.fill();
+  g.fillStyle = 'rgba(239,35,60,.25)'; g.beginPath(); g.arc(bx, by - 7, 13, 0, 7); g.fill();
+});
+function updateJump() {
+  const grav = +gIn.value, height = +hIn.value, u = Math.sqrt(2 * grav * height);
+  $('#u').innerHTML = `${u.toFixed(2)}<i>m/s</i>`; $('#t').innerHTML = `${(2 * u / grav).toFixed(2)}<i>s</i>`;
+  $('#gOut').textContent = `${grav} m/s²`; $('#hOut').textContent = `${height} m`;
+  fill(gIn); fill(hIn);
+  if (still) { anim = 1; return drawJump(); }
+  cancelAnimationFrame(raf); const t0 = performance.now();
+  const step = (now) => { anim = Math.max(0, Math.min(1, (now - t0) / 700)); drawJump(); if (anim < 1) raf = requestAnimationFrame(step); };
+  raf = requestAnimationFrame(step);
+}
+gIn.addEventListener('input', updateJump); hIn.addEventListener('input', updateJump); updateJump();
+
+// ---- AI state machine (EnemyAI.cs)
+const STATES = [
+  ['idle', 'Idle', '', 'Standing still at spawn, already watching.', 'After 2 s → Patrol'],
+  ['patrol', 'Patrol', '', 'Walks between random patrol points at 2.5 m/s.', 'Hears a sound → Investigate · Sees you for 0.4 s → Chase'],
+  ['investigate', 'Investigate', '?', 'Says "What was that?", walks to the sound, then turns on the spot to scan.', 'Nothing after 5 s → Patrol · Sees you → Chase'],
+  ['search', 'Search', '?', 'Lost you during a chase. Goes to where you were last seen and sweeps the area.', 'Nothing after 8 s → Patrol · Sees you → Chase'],
+  ['chase', 'Chase', '!', 'Runs at 5 m/s to your last known position. Getting shot also triggers this, because a shot gives away where it came from.', 'In sight and under 18 m → Attack · Loses you → Search'],
+  ['attack', 'Attack', '!', 'Turns to face you and fires about every 0.9 s, with 2.5° of aim error so it can miss.', 'Out of sight or past 21.6 m → Chase'],
+];
+const list = $('#states'), detail = $('#stateDetail');
+STATES.forEach(([key, name, sym], i) => {
+  const li = document.createElement('li');
+  li.innerHTML = `<button type="button" class="s-${key}" aria-pressed="false"><span class="pip"></span>${name}<span class="sym">${sym}</span></button>`;
+  li.firstChild.addEventListener('click', () => pickState(i));
+  list.append(li);
+});
+function pickState(i) {
+  const [, name, , text, next] = STATES[i];
+  list.querySelectorAll('button').forEach((b, j) => b.setAttribute('aria-pressed', i === j));
+  detail.innerHTML = `<h3>${name}</h3><p>${text}</p><p class="next">${next}</p>`;
+}
+pickState(1);
+
+// ---- Hearing radar: radii from PlayerController.cs and the weapon setup
+const NOISES = [['Crouch', 0], ['Walk', 5], ['Slide', 8], ['Hard landing', 10], ['Sprint', 14], ['Launcher shot', 35], ['Rifle shot', 45]];
+const ENEMIES = [[4, -2], [-6, 5], [10, 6], [-12, -9], [20, -14], [-25, 18], [33, 22], [-40, -10]]; // metres from the player
+let radius = 14, pulse = 0;
+const noise = $('#noise');
+NOISES.forEach(([name, r]) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.textContent = r ? `${name} ${r} m` : `${name} · silent`;
+  b.setAttribute('aria-pressed', r === radius);
+  b.addEventListener('click', () => {
+    radius = r;
+    noise.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    $('#radarR').textContent = r ? `${name} ${r} m` : `${name} · silent`;
+    ping();
+  });
+  noise.append(b);
+});
+const drawRadar = surface($('#radar'), (g, w, h) => {
+  g.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2, scale = Math.min(w, h) / 2 / 48;
+  g.strokeStyle = 'rgba(255,255,255,.05)'; g.lineWidth = 1;
+  for (let r = 10; r <= 50; r += 10) { g.beginPath(); g.arc(cx, cy, r * scale, 0, 7); g.stroke(); }
+  // Sight cone of an enemy: 55° half-angle, 30 m (drawn for the nearest one)
+  const [ex, ey] = ENEMIES[1], a = Math.atan2(-ey, -ex) + 0.5, half = 55 * Math.PI / 180;
+  g.fillStyle = 'rgba(245,184,61,.06)'; g.beginPath(); g.moveTo(cx + ex * scale, cy + ey * scale);
+  g.arc(cx + ex * scale, cy + ey * scale, 30 * scale, a - half, a + half); g.closePath(); g.fill();
+  // The sound sphere
+  if (radius) {
+    const r = radius * scale * (still ? 1 : Math.min(1, pulse));
+    g.fillStyle = 'rgba(239,35,60,.08)'; g.strokeStyle = red; g.lineWidth = 1.5;
+    g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill(); g.stroke();
+  }
+  let heard = 0;
+  ENEMIES.forEach(([x, y]) => {
+    const inside = radius && Math.hypot(x, y) <= radius;
+    heard += inside;
+    const px = cx + x * scale, py = cy + y * scale;
+    g.fillStyle = inside ? amber : '#3a3a44'; g.beginPath(); g.arc(px, py, 5, 0, 7); g.fill();
+    if (inside) { g.fillStyle = amber; g.font = '700 13px "JetBrains Mono", monospace'; g.fillText('?', px + 8, py - 6); }
+  });
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(cx, cy, 6, 0, 7); g.fill();
+  g.fillStyle = '#6b6b76'; g.font = '500 10px "JetBrains Mono", monospace'; g.fillText('10 m rings · yellow cone = one enemy’s 55° sight', 10, h - 10);
+  $('#radarNote').textContent = radius
+    ? `${heard} of ${ENEMIES.length} enemies hear it and come to investigate. Sound passes through walls, a known ceiling marked in the code.`
+    : 'Crouching makes no sound at all. Only sight can give you away.';
+});
+function ping() {
+  if (still) return drawRadar();
+  pulse = 0; const t0 = performance.now();
+  const step = (now) => { pulse = Math.max(0, (now - t0) / 600); drawRadar(); if (pulse < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+ping();
+
+// ---- Weapons: damage(d) = damage · lerp(1, min, invLerp(start, end, d)) · head (Weapon.cs)
+const GUNS = [
+  { name: 'Rifle', type: 'Hitscan · automatic', rpm: 650, mag: 30, reload: 1.9, dmg: 24, head: 2, start: 25, end: 60, min: .6 },
+  { name: 'Launcher', type: 'Projectile · 60 m/s with gravity', rpm: 80, mag: 4, reload: 2.6, dmg: 90, head: 1.5, start: 40, end: 90, min: .8 },
+];
+const dmgAt = (w, d) => w.dmg * (1 + (w.min - 1) * Math.max(0, Math.min(1, (d - w.start) / (w.end - w.start))));
+const distIn = $('#dist'), charts = [];
+GUNS.forEach((w) => {
+  const el = document.createElement('div');
+  el.className = 'shell reveal';
+  el.innerHTML = `<div class="core gun">
+    <div class="hud-label"><span>${w.type}</span><b>${w.rpm} rpm</b></div>
+    <h3 style="margin-top:18px">${w.name}</h3>
+    <div class="specs">
+      <div><small>Magazine</small><strong>${w.mag}</strong></div>
+      <div><small>Reload</small><strong>${w.reload}<i>s</i></strong></div>
+      <div><small>Damage</small><strong>${w.dmg}<i>×${w.head} head</i></strong></div>
+    </div>
+    <canvas class="falloff" aria-label="${w.name} damage against distance"></canvas>
+    <p class="dmg" aria-live="polite"></p></div>`;
+  $('#guns').append(el);
+  const out = el.querySelector('.dmg');
+  const redraw = surface(el.querySelector('canvas'), (g, cw, ch) => {
+    const d = +distIn.value, pad = 22, max = 100, top = w.dmg * w.head;
+    const X = (m) => pad + (cw - pad * 2) * m / max, Y = (v) => ch - pad - (ch - pad * 2) * v / top;
+    g.clearRect(0, 0, cw, ch);
+    g.fillStyle = 'rgba(255,255,255,.05)'; g.fillRect(X(w.start), pad, X(w.end) - X(w.start), ch - pad * 2);
+    g.fillStyle = '#6b6b76'; g.font = '500 10px "JetBrains Mono", monospace';
+    g.fillText('0 m', pad, ch - 6); g.fillText('100 m', cw - pad - 34, ch - 6); g.fillText(`falloff ${w.start}–${w.end} m`, X(w.start) + 4, pad - 6);
+    [[1, 'rgba(255,255,255,.75)'], [w.head, red]].forEach(([mult, col]) => {
+      g.strokeStyle = col; g.lineWidth = 2; g.beginPath();
+      for (let m = 0; m <= max; m++) { const v = dmgAt(w, m) * mult; m ? g.lineTo(X(m), Y(v)) : g.moveTo(X(m), Y(v)); }
+      g.stroke();
+    });
+    g.strokeStyle = 'rgba(255,255,255,.25)'; g.setLineDash([3, 4]); g.beginPath(); g.moveTo(X(d), pad); g.lineTo(X(d), ch - pad); g.stroke(); g.setLineDash([]);
+    const body = dmgAt(w, d);
+    out.innerHTML = `At ${d} m: body <b>${body.toFixed(1)}</b> · head <b class="h">${(body * w.head).toFixed(1)}</b>`;
+  });
+  charts.push(redraw);
+});
+distIn.addEventListener('input', () => { $('#dOut').textContent = `${distIn.value} m`; fill(distIn); charts.forEach((c) => c()); });
+fill(distIn);
+
+// ---- Controls: cards light up for the matching key
+const KEYS = [
+  [['W', 'A', 'S', 'D'], 'Move', ['KeyW', 'KeyA', 'KeyS', 'KeyD']],
+  [['Shift'], 'Sprint', ['ShiftLeft', 'ShiftRight']],
+  [['Ctrl', 'C'], 'Crouch · slide while sprinting', ['ControlLeft', 'ControlRight', 'KeyC']],
+  [['Space'], 'Jump', ['Space']],
+  [['LMB', 'RMB'], 'Fire · aim', []],
+  [['R'], 'Reload', ['KeyR']],
+  [['1', '2'], 'Switch weapon', ['Digit1', 'Digit2']],
+  [['Esc'], 'Pause', ['Escape']],
+  [['F1'], 'AI state overlay', ['F1']],
+  [['F2'], 'Feel layer on / off', ['F2']],
+  [['F3'], 'Object pooling on / off', ['F3']],
+];
+const keyEls = KEYS.map(([caps, label]) => {
+  const el = document.createElement('div');
+  el.className = 'key';
+  el.innerHTML = `<kbd>${caps.map((c) => `<span>${c}</span>`).join('')}</kbd><p>${label}</p>`;
+  $('#keys').append(el);
+  return el;
+});
+const typing = (e) => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+addEventListener('keydown', (e) => {
+  if (typing(e)) return;
+  KEYS.forEach(([, , codes], i) => { if (codes.includes(e.code)) keyEls[i].classList.add('on'); });
+  if (['F1', 'F2', 'F3'].includes(e.code)) e.preventDefault();
+});
+addEventListener('keyup', (e) => KEYS.forEach(([, , codes], i) => { if (codes.includes(e.code)) keyEls[i].classList.remove('on'); }));
+addEventListener('mousedown', (e) => { if (e.target.closest('#controls')) keyEls[4].classList.add('on'); });
+addEventListener('mouseup', () => keyEls[4].classList.remove('on'));
+
+// ---- Scroll reveals
+const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+  if (!e.isIntersecting) return;
+  e.target.classList.add('in'); io.unobserve(e.target);
+}), { threshold: 0.15, rootMargin: '0px 0px -40px' });
+document.querySelectorAll('.reveal, .waves').forEach((el) => io.observe(el));
+</script>
+</body>
+</html>
